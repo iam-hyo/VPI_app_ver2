@@ -1,15 +1,14 @@
 import React, { useState, useEffect } from 'react';
-import { mockApi } from '../../api/mockApi.js';
+import { validateVideoDataForVPI } from '../../utils/dataValidator.js';
+import { getPredictedViews } from '../../api/predictionApi.js'; 
 import { formatNumber, formatTimeAgo } from '../../utils/formatters.js';
 import { HelpCircleIcon, LoaderIcon } from '../common/Icon.jsx';
 
 const VideoCard = ({ video }) => {
-    // --- 상태(State) 정의 ---
     const [vpi, setVpi] = useState(null);
-    const [vpiError, setVpiError] = useState(null);
+    // 오류 메시지를 상세하게 저장할 상태
+    const [vpiError, setVpiError] = useState(null); 
     const [isLoadingVpi, setIsLoadingVpi] = useState(true);
-    
-    // 툴팁에 표시할 값들을 상태로 관리합니다.
     const [actualViews, setActualViews] = useState(0);
     const [predictedViews, setPredictedViews] = useState(0);
 
@@ -18,34 +17,37 @@ const VideoCard = ({ video }) => {
             setIsLoadingVpi(true);
             setVpiError(null);
             
-            if (!video.channel?.statistics?.subscriberCount || !video.statistics?.likeCount) {
-                setVpiError("VPI 계산 정보 부족");
+            const validationResult = validateVideoDataForVPI(video);
+            if (!validationResult.isValid) {
+                // 2. 검사 결과에서 받은 구체적인 오류 메시지를 상태에 저장합니다.
+                setVpiError(validationResult.error);
                 setIsLoadingVpi(false);
-                return;
+                return; // 유효하지 않으면 API 호출을 중단합니다.
             }
 
             const elapsed_time = (new Date() - new Date(video.snippet.publishedAt)) / (1000 * 60 * 60 * 24);
             const durationMatch = video.contentDetails.duration.match(/PT(?:(\d+)M)?(?:(\d+)S)?/);
-            const minutes = durationMatch && durationMatch[1] ? parseInt(durationMatch[1], 10) : 0;
-            const seconds = durationMatch && durationMatch[2] ? parseInt(durationMatch[2], 10) : 0;
+            const minutes = durationMatch ? parseInt(durationMatch[1] || 0, 10) : 0;
+            const seconds = durationMatch ? parseInt(durationMatch[2] || 0, 10) : 0;
             const is_short = (minutes * 60 + seconds) <= 60;
 
             const requestBody = {
-                is_short,
+                is_short, // 이 필드는 현재 백엔드에서 사용하지 않지만, 명세에 따라 전달합니다.
                 elapsed_time,
                 subscriber_count: parseInt(video.channel.statistics.subscriberCount, 10),
                 like_count: parseInt(video.statistics.likeCount, 10),
             };
 
-            const response = await mockApi.predictViews(requestBody);
+            // 2. mockApi 대신 실제 API를 호출합니다.
+            const response = await getPredictedViews(requestBody);
 
+            // 3. 백엔드에서 받은 오류 메시지를 상태에 저장합니다.
             if (response.error || !response.predicted_view_count) {
-                setVpiError("예측 서버 연결 오류");
+                setVpiError(response.error || "알 수 없는 예측 오류");
             } else {
                 const currentActualViews = parseInt(video.statistics.viewCount, 10);
                 const currentPredictedViews = response.predicted_view_count;
 
-                // 계산된 값을 상태에 저장합니다.
                 setActualViews(currentActualViews);
                 setPredictedViews(currentPredictedViews);
                 
@@ -73,15 +75,15 @@ const VideoCard = ({ video }) => {
                     <span>{formatTimeAgo(video.snippet.publishedAt)}</span>
                 </div>
                 
-                {/* --- 요청하신 대로 수정된 부분 --- */}
                 <div className="flex flex-wrap gap-3">
-                    <div className={`group relative px-3 py-1 rounded-md border text-sm font-semibold ${vpiColor}`}>
+                    <div className={`group relative px-3 py-1 rounded-md border text-sm font-semibold min-w-[120px] text-center ${vpiColor}`}>
                         {isLoadingVpi ? (
-                            <span className="flex items-center gap-1"><LoaderIcon className="w-4 h-4" /> VPI 계산중...</span>
+                            <span className="flex items-center justify-center gap-1"><LoaderIcon className="w-4 h-4" /> VPI 계산중...</span>
                         ) : vpiError ? (
-                            <span data-tooltip={vpiError}>VPI 계산 오류</span>
+                            // 4. 오류 발생 시, 받은 오류 메시지를 직접 표시합니다.
+                            <span className="text-red-400 text-xs font-bold">{vpiError}</span>
                         ) : (
-                            <span className="group relative flex items-center gap-1">
+                            <span className="group relative flex items-center justify-center gap-1">
                                 VPI Index: {vpi}
                                 <HelpCircleIcon className="w-4 h-4" />
                                 <div className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 w-max max-w-xs p-2 bg-black text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
@@ -89,7 +91,6 @@ const VideoCard = ({ video }) => {
                                 </div>
                             </span>
                         )}
-                        {vpiError && <div className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 w-max px-2 py-1 bg-black text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">{vpiError}</div>}
                     </div>
                     <div className="group relative px-3 py-1 rounded-md border bg-purple-500/20 text-purple-400 border-purple-500/30 text-sm">카테고리 : 개발 중</div>
                     <div className="group relative px-3 py-1 rounded-md border bg-indigo-500/20 text-indigo-400 border-indigo-500/30 text-sm flex items-center gap-1">꿀지표: --점</div>

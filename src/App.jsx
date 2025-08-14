@@ -97,7 +97,6 @@ export default function App() {
 
     return (
         <div className="bg-gray-900 text-white min-h-screen font-sans">
-        {/* // <div className="bg-gray-900 text-white min-h-screen font-sans border-8 border-red-500"> */}
             <Sidebar history={searchHistory} onLoadHistory={handleLoadHistory} onDeleteHistory={deleteHistoryItem} onDeleteAllHistory={deleteAllHistory} isExpanded={isSidebarExpanded} setExpanded={setSidebarExpanded} />
             <main className={`transition-all duration-300 ease-in-out ${isSidebarExpanded ? 'sm:ml-72' : 'ml-0'}`}>
                 {error && <div className="bg-red-500 text-white p-4 text-center fixed top-0 left-0 right-0 z-50">{error}</div>}
